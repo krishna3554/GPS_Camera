@@ -6,6 +6,7 @@ import 'package:gps_camera/services/database_service.dart';
 import 'package:gps_camera/services/geocoding_service.dart';
 import 'package:gps_camera/services/storage_service.dart';
 import 'package:gps_camera/utils/exif_writer.dart';
+import 'package:gps_camera/utils/photo_overlay_writer.dart';
 
 class CameraService {
   CameraService._internal();
@@ -16,6 +17,7 @@ class CameraService {
   final GeocodingService _geocodingService = GeocodingService();
   final DatabaseService _databaseService = DatabaseService();
   final ExifWriter _exifWriter = ExifWriter();
+  final PhotoOverlayWriter _photoOverlayWriter = PhotoOverlayWriter();
 
   CameraController? _controller;
   List<CameraDescription> _cameras = <CameraDescription>[];
@@ -57,17 +59,22 @@ class CameraService {
       }
 
       final String imagePath = await _storageService.savePhoto(shot);
-      final String thumbPath = await _storageService.generateThumbnail(imagePath);
-
+      final Map<String, String> addressData = await _geocodingService
+          .reverseGeocode(location.latitude, location.longitude);
+      await _photoOverlayWriter.stamp(
+        imagePath: imagePath,
+        location: location,
+        address: addressData['address'],
+        city: addressData['city'],
+        country: addressData['country'],
+      );
       await _exifWriter.writeGPSToExif(
         imagePath,
         location.latitude,
         location.longitude,
         location.altitude,
       );
-
-      final Map<String, String> addressData = await _geocodingService
-          .reverseGeocode(location.latitude, location.longitude);
+      final String thumbPath = await _storageService.generateThumbnail(imagePath);
 
       final GeoPhoto draft = GeoPhoto(
         imagePath: imagePath,
