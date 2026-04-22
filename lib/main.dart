@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gps_camera/screens/camera_screen.dart';
 
+import 'splash_screen.dart';
+
 void main() {
   runApp(const ProviderScope(child: GPSCameraApp()));
 }
@@ -18,6 +20,10 @@ class GPSCameraApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const CameraScreen(),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+      ),
+      home: const SplashScreen(),
     );
   }
 }
