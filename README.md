@@ -1,110 +1,109 @@
 # GPS Camera (Flutter)
 
-This is a standard Flutter app scaffold configured for Android, iOS, web, desktop, and tests.
+GPS Camera is a Flutter app for capturing photos with GPS metadata, viewing geotagged images in a gallery, and exploring photo locations on a map.
 
-## Current project health (Android Studio + Flutter)
+## Prerequisites
 
-From a repository/config perspective, this project is structurally correct for Android Studio:
+Before running the app in Android Studio, make sure you have:
 
-- Flutter package metadata and Dart SDK constraint are present.
-- Android Gradle setup uses modern Kotlin DSL files.
-- Android entrypoint (`MainActivity`) and manifest are valid.
+- **Flutter SDK** (stable channel)
+- **Android Studio** (latest stable)
+- **Flutter and Dart plugins** installed in Android Studio
+- **Android SDK** installed and configured
+- At least one **Android emulator** or a physical Android device (USB debugging enabled)
 
-> Note: In this environment, `flutter` is not installed, so I cannot execute `flutter doctor`, `flutter pub get`, or an APK build here. See the verification commands below and run them on your machine.
+## Run in Android Studio (step-by-step)
 
----
+1. **Clone the repository**
 
-## Run this project in Android Studio (recommended flow)
+   ```bash
+   git clone <your-repo-url>
+   cd GPS_Camera
+   ```
 
-### 1) Install tooling
+2. **Open the project in Android Studio**
 
-- Install **Android Studio** (latest stable).
-- Install **Flutter SDK** (stable channel).
-- In Android Studio, install plugins:
-  - **Flutter**
-  - **Dart**
+   - Launch Android Studio.
+   - Select **Open** and choose the `GPS_Camera` folder.
 
-### 2) Clone and open
+3. **Fetch dependencies**
+
+   In Android Studio Terminal (or your system terminal at project root):
+
+   ```bash
+   flutter pub get
+   ```
+
+4. **Select an emulator or connected device**
+
+   - Start an Android emulator from Device Manager, or connect a physical device.
+   - Choose the target device from the device selector in the Android Studio toolbar.
+
+5. **Create/select Run configuration**
+
+   - Use the default Flutter run configuration (or create one via **Run > Edit Configurations**).
+   - Ensure `lib/main.dart` is the entrypoint.
+
+6. **Launch the app**
+   - Click **Run** (green play button) in Android Studio.
+
+## Terminal validation commands
+
+Run these from the project root to validate setup and code health:
 
 ```bash
-git clone <your-repo-url>
-cd GPS_Camera
-```
-
-Then open the folder in Android Studio.
-
-### 3) Verify SDK paths
-
-Create/update `android/local.properties` (this file is local-only, do not commit):
-
-```properties
-flutter.sdk=/absolute/path/to/flutter
-sdk.dir=/absolute/path/to/Android/Sdk
-```
-
-### 4) Run baseline checks (terminal in project root)
-
-```bash
-flutter --version
 flutter doctor -v
-flutter pub get
 flutter analyze
 flutter test
-flutter run -d emulator-5554
+flutter run
 ```
 
-If Gradle sync fails in Android Studio, run:
+## Permissions notes (camera, location, media)
 
-```bash
-cd android
-./gradlew --version
-./gradlew tasks
-```
+This app requires runtime permissions for core features:
 
-### 5) Run from Android Studio
+- **Camera**: required to capture photos.
+- **Location**: required to geotag photos with coordinates.
+- **Media/Storage access**: required to save and display photos in gallery views.
 
-- Start an Android emulator (or connect a device with USB debugging).
-- Select the device in the toolbar.
-- Click **Run**.
+If you deny a permission, related features may not work until access is re-enabled in system settings.
 
----
+## Troubleshooting
 
-## Android notes
+### 1) `flutter doctor -v` shows missing components
 
-- The project currently uses placeholder application id/namespace `com.example.gps_camera`.
-  - Change this before publishing.
-- Release signing is currently set to debug signing for convenience.
-  - Configure proper release signing before Play Store deployment.
+- Install or update the missing SDK/tooling shown by `flutter doctor -v`.
+- Re-run `flutter doctor -v` until all critical Android checks pass.
 
----
+### 2) Device not listed in Android Studio
 
-## Troubleshooting quick fixes
+- Start an emulator from Device Manager.
+- For physical devices, enable Developer Options and USB debugging.
+- Confirm detection with:
 
-### A) `flutter.sdk not set in local.properties`
+  ```bash
+  flutter devices
+  ```
 
-Add `flutter.sdk=...` to `android/local.properties`.
+### 3) Build or sync failures
 
-### B) Gradle sync issues
+- Run:
 
-- Confirm Android SDK and Java are installed.
-- Make sure your Flutter SDK is on stable and up-to-date:
+  ```bash
+  flutter clean
+  flutter pub get
+  ```
 
-```bash
-flutter channel stable
-flutter upgrade
-```
+- Then retry **Run** in Android Studio.
 
-### C) Stale build cache
+### 4) Camera/location/media features not working
 
-```bash
-flutter clean
-flutter pub get
-```
+- Verify app permissions are granted in Android app settings.
+- If permission was permanently denied, re-enable it manually in system settings.
+- Test on both emulator and physical device when possible (camera/location behavior can vary).
 
----
-
-## Useful docs
+## Helpful documentation
 
 - Flutter install: https://docs.flutter.dev/get-started/install
-- Flutter + Android setup: https://docs.flutter.dev/get-started/install/windows/mobile
 - Android Studio: https://developer.android.com/studio
+- Flutter Android setup: https://docs.flutter.dev/get-started/install/windows/mobile
