@@ -1,0 +1,72 @@
+import 'package:flutter/material.dart';
+
+class MapThumbnail extends StatelessWidget {
+  const MapThumbnail({
+    required this.lat,
+    required this.lng,
+    super.key,
+    this.zoom = 15,
+  });
+
+  final double lat;
+  final double lng;
+  final int zoom;
+
+  String get _staticMapUrl {
+    final String coordinate = '${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}';
+
+    return Uri.https('staticmap.openstreetmap.de', '/staticmap.php', <String, String>{
+      'center': coordinate,
+      'zoom': zoom.toString(),
+      'size': '300x200',
+      'markers': '$coordinate,red',
+    }).toString();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 2),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 3)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Image.network(
+          _staticMapUrl,
+          fit: BoxFit.cover,
+          loadingBuilder: (
+            BuildContext context,
+            Widget child,
+            ImageChunkEvent? loadingProgress,
+          ) {
+            if (loadingProgress == null) return child;
+            return const ColoredBox(
+              color: Colors.black26,
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            );
+          },
+          errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
+            return const ColoredBox(
+              color: Colors.black45,
+              child: Center(
+                child: Icon(Icons.map_outlined, color: Colors.white70, size: 22),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}

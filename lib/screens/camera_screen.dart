@@ -7,6 +7,7 @@ import 'package:gps_camera/models/location_data.dart';
 import 'package:gps_camera/providers/photos_provider.dart';
 import 'package:gps_camera/services/camera_service.dart';
 import 'package:gps_camera/services/geocoding_service.dart';
+import 'package:gps_camera/widgets/map_thumbnail.dart';
 
 class CameraScreen extends ConsumerStatefulWidget {
   const CameraScreen({super.key});
@@ -163,6 +164,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
               country: _overlayCountry,
             ),
           ),
+          if (_overlayLocation != null)
+            Positioned(
+              left: 16,
+              bottom: 48,
+              child: MapThumbnail(
+                lat: _overlayLocation!.latitude,
+                lng: _overlayLocation!.longitude,
+              ),
+            ),
           Positioned(
             bottom: 40,
             left: 0,
