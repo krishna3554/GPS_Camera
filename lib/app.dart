@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'screens/camera_screen.dart';
+import 'screens/gallery_screen.dart';
+import 'screens/map_screen.dart';
+
 class App extends StatelessWidget {
   const App({super.key});
 
@@ -53,7 +57,7 @@ final GoRouter _router = GoRouter(
       path: '/detail/:id',
       name: 'detail',
       builder: (context, state) =>
-          DetailScreen(id: state.pathParameters['id']!),
+          DetailScreen(id: state.pathParameters['id'] ?? ''),
     ),
     GoRoute(
       path: '/settings',
@@ -81,6 +85,7 @@ class _SplashScreenState extends State<SplashScreen> {
     final statuses = await [
       Permission.camera,
       Permission.locationWhenInUse,
+      Permission.photos,
     ].request();
 
     if (!mounted) {
@@ -90,8 +95,9 @@ class _SplashScreenState extends State<SplashScreen> {
     final isCameraGranted = statuses[Permission.camera]?.isGranted ?? false;
     final isLocationGranted =
         statuses[Permission.locationWhenInUse]?.isGranted ?? false;
+    final isPhotosGranted = statuses[Permission.photos]?.isGranted ?? false;
 
-    if (isCameraGranted && isLocationGranted) {
+    if (isCameraGranted && isLocationGranted && isPhotosGranted) {
       context.goNamed('camera');
     } else {
       context.goNamed('settings');
@@ -137,33 +143,6 @@ class AppShell extends StatelessWidget {
   }
 }
 
-class CameraScreen extends StatelessWidget {
-  const CameraScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const _PageScaffold(title: 'Camera');
-  }
-}
-
-class GalleryScreen extends StatelessWidget {
-  const GalleryScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const _PageScaffold(title: 'Gallery');
-  }
-}
-
-class MapScreen extends StatelessWidget {
-  const MapScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const _PageScaffold(title: 'Map');
-  }
-}
-
 class DetailScreen extends StatelessWidget {
   const DetailScreen({required this.id, super.key});
 
@@ -172,7 +151,7 @@ class DetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Detail')),
+      appBar: AppBar(title: const Text('Photo Detail')),
       body: Center(child: Text('Photo id: $id')),
     );
   }
@@ -184,27 +163,29 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: Center(
-        child: FilledButton(
-          onPressed: () => context.goNamed('splash'),
-          child: const Text('Grant permissions and continue'),
+      appBar: AppBar(title: const Text('Permissions Required')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Camera, location, and photo permissions are required to use all tabs.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () => context.goNamed('splash'),
+              child: const Text('Retry permissions'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: openAppSettings,
+              child: const Text('Open app settings'),
+            ),
+          ],
         ),
       ),
-    );
-  }
-}
-
-class _PageScaffold extends StatelessWidget {
-  const _PageScaffold({required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(child: Text('$title screen')),
     );
   }
 }
