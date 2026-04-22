@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:image/image.dart' as img;
@@ -22,7 +23,7 @@ class StorageService {
 
   Future<String> generateThumbnail(String imagePath) async {
     final File source = File(imagePath);
-    final List<int> bytes = await source.readAsBytes();
+    final Uint8List bytes = await source.readAsBytes();
     final img.Image? decoded = img.decodeImage(bytes);
     if (decoded == null) {
       throw StateError('Unable to decode image for thumbnail generation.');
