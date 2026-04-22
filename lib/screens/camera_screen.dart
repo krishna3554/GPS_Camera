@@ -52,7 +52,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen> {
     }
 
     final Position position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      desiredAccuracy: LocationAccuracy.high,
     );
 
     return LocationData(
