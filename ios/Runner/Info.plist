@@ -36,6 +36,8 @@
 	<string>Allow saving captured photos to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow photo library access to read and manage saved images.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Allow microphone access while recording videos.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
