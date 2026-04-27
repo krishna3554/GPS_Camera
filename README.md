@@ -1,18 +1,56 @@
 # GPS Camera (Flutter)
 
-GPS Camera is a Flutter app for capturing photos with GPS metadata, viewing geotagged images in a gallery, and exploring photo locations on a map.
+GPS Camera is a Flutter app for capturing photos/videos with GPS metadata, previewing captures in a gallery, and viewing stamped location details.
+
+## What changed in the redesign
+
+The app has been restructured around a new clean-feature layout and UI refresh:
+
+- **Material 3 theme** with orange primary (`#F5A623`).
+- **Camera-first flow** with:
+  - full-screen preview,
+  - photo/video mode toggle,
+  - zoom controls (`0.5x`, `1x`, `2x`),
+  - flash/front-back camera controls,
+  - animated capture feedback.
+- **Live location stamp card** overlay:
+  - address + date + time,
+  - mini map thumbnail (OpenStreetMap via `flutter_map`).
+- **Gallery experience**:
+  - grid thumbnails,
+  - video duration badges,
+  - multi-select, delete, and share.
+- **Detail view**:
+  - swipable media pages,
+  - play/pause video UI,
+  - QR code export for map links,
+  - share/delete actions.
+- **Result screen**:
+  - auto-save to camera roll,
+  - success banner,
+  - one-tap share CTA.
+- **Metadata sidecar support** (`.gps.json`) for location persistence.
+
+## Project structure (new)
+
+Key paths added/updated:
+
+- `lib/core/` → theme, constants, utils, shared widgets.
+- `lib/features/` → camera, gallery, detail, result, locations.
+- `lib/models/` → `LocationInfo`, `CapturedMedia`.
+- `lib/app.dart` + `lib/main.dart` → routing/bootstrap/orientation/permission flow.
 
 ## Prerequisites
 
-Before running the app in Android Studio, make sure you have:
+Before running the app, make sure you have:
 
 - **Flutter SDK** (stable channel)
 - **Android Studio** (latest stable)
 - **Flutter and Dart plugins** installed in Android Studio
 - **Android SDK** installed and configured
-- At least one **Android emulator** or a physical Android device (USB debugging enabled)
+- At least one **Android emulator** or a physical Android/iOS device
 
-## Run in Android Studio (step-by-step)
+## Run in Android Studio
 
 1. **Clone the repository**
 
@@ -21,89 +59,92 @@ Before running the app in Android Studio, make sure you have:
    cd GPS_Camera
    ```
 
-2. **Open the project in Android Studio**
-
-   - Launch Android Studio.
-   - Select **Open** and choose the `GPS_Camera` folder.
-
-3. **Fetch dependencies**
-
-   In Android Studio Terminal (or your system terminal at project root):
+2. **Install dependencies**
 
    ```bash
    flutter pub get
    ```
 
-4. **Select an emulator or connected device**
+3. **Run the app**
 
-   - Start an Android emulator from Device Manager, or connect a physical device.
-   - Choose the target device from the device selector in the Android Studio toolbar.
+   ```bash
+   flutter run
+   ```
 
-5. **Create/select Run configuration**
-
-   - Use the default Flutter run configuration (or create one via **Run > Edit Configurations**).
-   - Ensure `lib/main.dart` is the entrypoint.
-
-6. **Launch the app**
-   - Click **Run** (green play button) in Android Studio.
-
-## Terminal validation commands
-
-Run these from the project root to validate setup and code health:
+## Validation commands
 
 ```bash
 flutter doctor -v
 flutter analyze
 flutter test
-flutter run
 ```
 
-## Permissions notes (camera, location, media)
+## Permissions used
 
-This app requires runtime permissions for core features:
+The app requests runtime permissions for:
 
-- **Camera**: required to capture photos.
-- **Location**: required to geotag photos with coordinates.
-- **Media/Storage access**: required to save and display photos in gallery views.
+- Camera
+- Microphone (video recording)
+- Location (GPS metadata)
+- Photos/media storage
 
-If you deny a permission, related features may not work until access is re-enabled in system settings.
+Platform declarations are configured in:
+
+- Android: `android/app/src/main/AndroidManifest.xml`
+- iOS: `ios/Runner/Info.plist`
+
+## Google Maps API key — where to add it
+
+> Current implementation uses **OpenStreetMap (`flutter_map`)**, so a Google Maps API key is **not required**.
+
+If you later switch to Google Maps (`google_maps_flutter`), add keys here:
+
+### Android
+
+1. Open `android/app/src/main/AndroidManifest.xml`
+2. Inside `<application>`, add:
+
+```xml
+<meta-data
+    android:name="com.google.android.geo.API_KEY"
+    android:value="YOUR_ANDROID_GOOGLE_MAPS_API_KEY" />
+```
+
+### iOS
+
+1. Open `ios/Runner/AppDelegate.swift`
+2. Import Google Maps and provide the key in `application(_:didFinishLaunchingWithOptions:)`:
+
+```swift
+import GoogleMaps
+
+GMSServices.provideAPIKey("YOUR_IOS_GOOGLE_MAPS_API_KEY")
+```
+
+Also ensure the iOS key is enabled for **Maps SDK for iOS** in Google Cloud Console.
 
 ## Troubleshooting
 
-### 1) `flutter doctor -v` shows missing components
+### Flutter/Dart not found
 
-- Install or update the missing SDK/tooling shown by `flutter doctor -v`.
-- Re-run `flutter doctor -v` until all critical Android checks pass.
+If `flutter` or `dart` are not recognized, install Flutter and add it to your PATH.
 
-### 2) Device not listed in Android Studio
+### Camera or location not working
 
-- Start an emulator from Device Manager.
-- For physical devices, enable Developer Options and USB debugging.
-- Confirm detection with:
+- Ensure permissions are granted in OS settings.
+- Test on a real device for best GPS/camera behavior.
 
-  ```bash
-  flutter devices
-  ```
+### Build issues
 
-### 3) Build or sync failures
+```bash
+flutter clean
+flutter pub get
+```
 
-- Run:
-
-  ```bash
-  flutter clean
-  flutter pub get
-  ```
-
-- Then retry **Run** in Android Studio.
-
-### 4) Camera/location/media features not working
-
-- Verify app permissions are granted in Android app settings.
-- If permission was permanently denied, re-enable it manually in system settings.
-- Test on both emulator and physical device when possible (camera/location behavior can vary).
+Then retry.
 
 ## Helpful documentation
 
 - Flutter install: https://docs.flutter.dev/get-started/install
 - Android Studio: https://developer.android.com/studio
-- Flutter Android setup: https://docs.flutter.dev/get-started/install/windows/mobile
+- Flutter packages: https://pub.dev/
