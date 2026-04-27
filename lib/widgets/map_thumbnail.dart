@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 class MapThumbnail extends StatelessWidget {
@@ -14,22 +16,34 @@ class MapThumbnail extends StatelessWidget {
   final int zoom;
   final double size;
 
-  String get _staticMapUrl {
-    final String coordinate = '${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}';
+  String get _tileUrl {
+    final int x = _tileX(lng, zoom);
+    final int y = _tileY(lat, zoom);
 
-    return Uri.https('staticmap.openstreetmap.de', '/staticmap.php', <String, String>{
-      'center': coordinate,
-      'zoom': zoom.toString(),
-      'size': '300x200',
-      'markers': '$coordinate,red',
-    }).toString();
+    return Uri.https('tile.openstreetmap.org', '/$zoom/$x/$y.png').toString();
+  }
+
+  int _tileX(double longitude, int z) {
+    final double normalizedLng = ((longitude + 180) % 360 + 360) % 360 - 180;
+    final double value = (normalizedLng + 180.0) / 360.0 * (1 << z);
+    return value.floor();
+  }
+
+  int _tileY(double latitude, int z) {
+    final double clippedLat = latitude.clamp(-85.05112878, 85.05112878);
+    final double latRad = clippedLat * math.pi / 180.0;
+    final double value =
+        (1.0 - math.log(math.tan(latRad) + (1 / math.cos(latRad))) / math.pi) /
+        2.0 *
+        (1 << z);
+    return value.floor();
   }
 
   @override
   Widget build(BuildContext context) {
-    final String url = _staticMapUrl;
+    final String url = _tileUrl;
     debugPrint(
-      '[MapThumbnail] Loading OpenStreetMap static image: $url '
+      '[MapThumbnail] Loading OpenStreetMap tile: $url '
       '(lat: $lat, lng: $lng, zoom: $zoom)',
     );
 
@@ -45,54 +59,62 @@ class MapThumbnail extends StatelessWidget {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: Image.network(
-          url,
-          headers: const <String, String>{'User-Agent': 'GPSCameraApp/1.0 (Flutter)'},
-          fit: BoxFit.cover,
-          loadingBuilder: (
-            BuildContext context,
-            Widget child,
-            ImageChunkEvent? loadingProgress,
-          ) {
-            if (loadingProgress == null) {
-              debugPrint('[MapThumbnail] OpenStreetMap image loaded successfully.');
-              return child;
-            }
+        child: Stack(
+          fit: StackFit.expand,
+          children: <Widget>[
+            Image.network(
+              url,
+              fit: BoxFit.cover,
+              loadingBuilder: (
+                BuildContext context,
+                Widget child,
+                ImageChunkEvent? loadingProgress,
+              ) {
+                if (loadingProgress == null) {
+                  debugPrint('[MapThumbnail] OpenStreetMap tile loaded successfully.');
+                  return child;
+                }
 
-            final int? expected = loadingProgress.expectedTotalBytes;
-            final int loaded = loadingProgress.cumulativeBytesLoaded;
-            if (expected != null) {
-              debugPrint('[MapThumbnail] Loading progress: $loaded / $expected bytes');
-            } else {
-              debugPrint('[MapThumbnail] Loading progress: $loaded bytes');
-            }
+                return const ColoredBox(
+                  color: Colors.black26,
+                  child: Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                );
+              },
+              errorBuilder: (
+                BuildContext context,
+                Object error,
+                StackTrace? stackTrace,
+              ) {
+                debugPrint('[MapThumbnail] Failed to load OpenStreetMap tile.');
+                debugPrint('[MapThumbnail] URL: $url');
+                debugPrint('[MapThumbnail] Error: $error');
+                if (stackTrace != null) {
+                  debugPrint('[MapThumbnail] StackTrace: $stackTrace');
+                }
 
-            return const ColoredBox(
-              color: Colors.black26,
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+                return const ColoredBox(
+                  color: Colors.black45,
+                  child: Center(
+                    child: Icon(Icons.map_outlined, color: Colors.white70, size: 22),
+                  ),
+                );
+              },
+            ),
+            const Center(
+              child: Icon(
+                Icons.location_pin,
+                color: Colors.redAccent,
+                size: 22,
+                shadows: <Shadow>[Shadow(color: Colors.black54, blurRadius: 4)],
               ),
-            );
-          },
-          errorBuilder: (BuildContext context, Object error, StackTrace? stackTrace) {
-            debugPrint('[MapThumbnail] Failed to load OpenStreetMap image.');
-            debugPrint('[MapThumbnail] URL: $url');
-            debugPrint('[MapThumbnail] Error: $error');
-            if (stackTrace != null) {
-              debugPrint('[MapThumbnail] StackTrace: $stackTrace');
-            }
-
-            return const ColoredBox(
-              color: Colors.black45,
-              child: Center(
-                child: Icon(Icons.map_outlined, color: Colors.white70, size: 22),
-              ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
