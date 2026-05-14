@@ -8,6 +8,7 @@ import '../../../app.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/location_utils.dart';
+import '../../../core/utils/permission_handler.dart';
 import '../../../core/widgets/location_stamp_card.dart';
 import '../../../models/captured_media.dart';
 import '../../../models/location_info.dart';
@@ -27,6 +28,7 @@ class _CameraScreenState extends State<CameraScreen>
   List<CameraDescription> _cameras = [];
   bool _loading = true;
   bool _cameraError = false;
+  bool _hasCameraPermission = false;
   bool _isPhotoMode = true;
   bool _isRecording = false;
   FlashMode _flashMode = FlashMode.off;
@@ -51,10 +53,44 @@ class _CameraScreenState extends State<CameraScreen>
       upperBound: 1,
       value: 1,
     );
-    _init();
+    _hasCameraPermission = widget.permissionsGranted;
+    _checkCameraPermissionAndInit();
+  }
+
+  Future<void> _checkCameraPermissionAndInit({bool request = false}) async {
+    if (!mounted) return;
+    setState(() => _loading = true);
+
+    final granted = request
+        ? await AppPermissionHandler.checkAndRequestCamera()
+        : await AppPermissionHandler.hasCameraPermission();
+
+    if (!mounted) return;
+    if (!granted) {
+      setState(() {
+        _hasCameraPermission = false;
+        _cameraError = false;
+        _loading = false;
+      });
+      return;
+    }
+
+    setState(() => _hasCameraPermission = true);
+    await _init();
+  }
+
+  Future<void> _requestCameraPermission() async {
+    await _checkCameraPermissionAndInit(request: true);
+    if (!mounted || _hasCameraPermission) return;
+
+    final status = await Permission.camera.status;
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      await openAppSettings();
+    }
   }
 
   Future<void> _init() async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _cameraError = false;
@@ -74,12 +110,29 @@ class _CameraScreenState extends State<CameraScreen>
         if (!mounted) return;
         setState(() => _locationInfo = value);
       });
+    } on CameraException catch (e) {
+      if (e.code == 'CameraAccessDenied' ||
+          e.code == 'CameraAccessDeniedWithoutPrompt' ||
+          e.code == 'CameraAccessRestricted') {
+        if (!mounted) return;
+        setState(() {
+          _hasCameraPermission = false;
+          _cameraError = false;
+        });
+      } else {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        try {
+          await _initController();
+        } catch (_) {
+          if (mounted) setState(() => _cameraError = true);
+        }
+      }
     } catch (_) {
       await Future<void>.delayed(const Duration(seconds: 1));
       try {
         await _initController();
       } catch (_) {
-        setState(() => _cameraError = true);
+        if (mounted) setState(() => _cameraError = true);
       }
     }
     if (mounted) setState(() => _loading = false);
@@ -90,7 +143,7 @@ class _CameraScreenState extends State<CameraScreen>
     _controller = CameraController(
       _cameras[_cameraIndex],
       ResolutionPreset.max,
-      enableAudio: true,
+      enableAudio: false,
     );
     await _controller!.initialize();
     await _controller!.setFlashMode(_flashMode);
@@ -99,11 +152,10 @@ class _CameraScreenState extends State<CameraScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_controller == null) return;
     if (state == AppLifecycleState.paused && _isRecording) {
       _stopRecording();
     } else if (state == AppLifecycleState.resumed) {
-      _init();
+      _checkCameraPermissionAndInit();
     }
   }
 
@@ -198,8 +250,8 @@ class _CameraScreenState extends State<CameraScreen>
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.permissionsGranted) {
-      return _PermissionUI(onGrant: openAppSettings);
+    if (!_hasCameraPermission) {
+      return _PermissionUI(onGrant: _requestCameraPermission);
     }
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
