@@ -4,21 +4,24 @@ import 'package:permission_handler/permission_handler.dart';
 
 class AppPermissionHandler {
   static Future<bool> requestAllPermissions() async {
-    final granted = <PermissionStatus>[];
+    final cameraStatus = await Permission.camera.request();
 
-    granted.add(await Permission.camera.request());
-    granted.add(await Permission.microphone.request());
-    granted.add(await Permission.locationAlways.request());
+    await Permission.microphone.request();
+    await Permission.locationWhenInUse.request();
 
     if (Platform.isAndroid) {
-      granted.add(await Permission.storage.request());
-      granted.add(await Permission.photos.request());
-      granted.add(await Permission.videos.request());
+      await Permission.photos.request();
+      await Permission.videos.request();
     } else if (Platform.isIOS) {
-      granted.add(await Permission.photos.request());
+      await Permission.photos.request();
     }
 
-    return granted.every((status) => status.isGranted || status.isLimited);
+    return cameraStatus.isGranted;
+  }
+
+  static Future<bool> hasCameraPermission() async {
+    final status = await Permission.camera.status;
+    return status.isGranted;
   }
 
   static Future<bool> checkAndRequestCamera() async {
@@ -27,7 +30,7 @@ class AppPermissionHandler {
   }
 
   static Future<bool> checkAndRequestLocation() async {
-    final status = await Permission.locationAlways.request();
+    final status = await Permission.locationWhenInUse.request();
     return status.isGranted;
   }
 }
