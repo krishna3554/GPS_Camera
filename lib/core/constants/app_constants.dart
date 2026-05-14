@@ -4,6 +4,8 @@ class AppConstants {
   static const String routeDetail = '/detail';
   static const String routeResult = '/result';
   static const String routeLocations = '/locations';
+  static const String routeSettings = '/settings';
+  static const String routeAccount = '/account';
 
   static const int minZoom = 1;
   static const int maxZoom = 8;

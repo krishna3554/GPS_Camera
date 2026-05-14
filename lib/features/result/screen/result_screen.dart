@@ -4,15 +4,17 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:video_player/video_player.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../models/captured_media.dart';
 import '../../../models/geo_photo_model.dart';
 import '../../../models/location_info.dart';
+import '../../../models/app_photo.dart';
+import '../../../services/app_photo_store.dart';
 import '../../../services/gallery_service.dart';
 import '../../../services/google_map_service.dart';
 import '../../../services/image_overlay_service.dart';
+import '../../../services/settings_service.dart';
 
 class ResultScreen extends StatefulWidget {
   const ResultScreen({
@@ -31,11 +33,12 @@ class ResultScreen extends StatefulWidget {
 }
 
 class _ResultScreenState extends State<ResultScreen> {
+  final AppPhotoStore _photoStore = const AppPhotoStore();
   final GalleryService _galleryService = const GalleryService();
   final GoogleMapService _googleMapService = const GoogleMapService();
   final ImageOverlayService _imageOverlayService = const ImageOverlayService();
+  final SettingsService _settingsService = const SettingsService();
 
-  VideoPlayerController? _video;
   bool _showBanner = false;
   bool _processing = true;
   String? _displayFilePath;
@@ -50,12 +53,7 @@ class _ResultScreenState extends State<ResultScreen> {
 
   Future<void> _init() async {
     try {
-      if (widget.type == MediaType.video) {
-        await _initVideo();
-        _savedGalleryPath = await _galleryService.saveFile(widget.filePath);
-      } else {
-        _savedGalleryPath = await _generateAndSaveGeoTaggedPhoto();
-      }
+      _savedGalleryPath = await _generateAndSaveGeoTaggedPhoto();
 
       if (!mounted) return;
       if (_savedGalleryPath != null) {
@@ -71,24 +69,18 @@ class _ResultScreenState extends State<ResultScreen> {
     }
   }
 
-  Future<void> _initVideo() async {
-    _video = VideoPlayerController.file(File(widget.filePath));
-    await _video!.initialize();
-    _video!
-      ..setLooping(true)
-      ..setVolume(0)
-      ..play();
-  }
-
   /// Builds the permanent overlay image, saves the final pixels to gallery,
   /// and returns the platform gallery path/content URI when available.
   Future<String?> _generateAndSaveGeoTaggedPhoto() async {
+    final settings = await _settingsService.load();
     final geoPhoto = _geoPhotoFromLocationInfo(widget.locationInfo);
     Uint8List? mapBytes;
     try {
       mapBytes = await _googleMapService.fetchThumbnail(
         latitude: geoPhoto.latitude,
         longitude: geoPhoto.longitude,
+        zoom: settings.mapZoomLevel.round(),
+        mapStyle: settings.mapStyle,
       );
     } catch (_) {
       // Keep saving functional if the static map request fails offline or by API quota.
@@ -102,10 +94,21 @@ class _ResultScreenState extends State<ResultScreen> {
     );
 
     if (mounted) setState(() => _displayFilePath = finalResult.filePath);
-    return _galleryService.saveImageBytes(
-      bytes: finalResult.bytes,
-      name: 'GPS_Map_Camera_${DateTime.now().millisecondsSinceEpoch}',
+    final savedPath = settings.autoSaveToGallery
+        ? await _galleryService.saveImageBytes(
+            bytes: finalResult.bytes,
+            name: 'GPS_Map_Camera_${DateTime.now().millisecondsSinceEpoch}',
+          )
+        : finalResult.filePath;
+    await _photoStore.addPhoto(
+      AppPhoto(
+        id: DateTime.now().microsecondsSinceEpoch.toString(),
+        filePath: finalResult.filePath,
+        locationInfo: widget.locationInfo,
+        capturedAt: DateTime.now(),
+      ),
     );
+    return savedPath;
   }
 
   GeoPhotoModel _geoPhotoFromLocationInfo(LocationInfo info) {
@@ -146,7 +149,6 @@ class _ResultScreenState extends State<ResultScreen> {
 
   @override
   void dispose() {
-    _video?.dispose();
     super.dispose();
   }
 
@@ -168,18 +170,7 @@ class _ResultScreenState extends State<ResultScreen> {
         body: Stack(
           children: [
             Positioned.fill(
-              child: widget.type == MediaType.photo
-                  ? Image.file(displayFile, fit: BoxFit.cover)
-                  : (_video != null && _video!.value.isInitialized)
-                      ? FittedBox(
-                          fit: BoxFit.cover,
-                          child: SizedBox(
-                            width: _video!.value.size.width,
-                            height: _video!.value.size.height,
-                            child: VideoPlayer(_video!),
-                          ),
-                        )
-                      : const Center(child: CircularProgressIndicator()),
+              child: Image.file(displayFile, fit: BoxFit.cover),
             ),
             if (_processing)
               Positioned.fill(
