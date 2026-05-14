@@ -1,37 +1,30 @@
 import 'dart:async';
 
-import 'package:geocoding/geocoding.dart';
-import 'package:geolocator/geolocator.dart';
-
 import '../../models/location_info.dart';
+import '../../services/location_service.dart';
 
 class LocationUtils {
+  static const LocationService _locationService = LocationService();
+
   static Future<LocationInfo?> getCurrentLocationInfo() async {
     try {
-      final enabled = await Geolocator.isLocationServiceEnabled();
-      if (!enabled) return null;
-
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 10),
+      final geoPhoto = await _locationService.getCurrentGeoPhoto();
+      return LocationInfo(
+        address: geoPhoto.address,
+        date: geoPhoto.capturedAt.toLocal().toString().split(' ').first,
+        time: geoPhoto.formattedDateTime.split('  ').last,
+        latitude: geoPhoto.latitude,
+        longitude: geoPhoto.longitude,
+        placeName: geoPhoto.placeName,
+        locality: geoPhoto.locality,
+        administrativeArea: geoPhoto.administrativeArea,
+        country: geoPhoto.country,
+        postalCode: geoPhoto.postalCode,
+        altitude: geoPhoto.altitude,
+        speedMetersPerSecond: geoPhoto.speedMetersPerSecond,
+        heading: geoPhoto.heading,
+        accuracy: geoPhoto.accuracy,
       );
-
-      final placemarks =
-          await placemarkFromCoordinates(pos.latitude, pos.longitude);
-      final p = placemarks.isNotEmpty ? placemarks.first : null;
-
-      final address = [
-        if ((p?.subThoroughfare ?? '').isNotEmpty) p?.subThoroughfare,
-        if ((p?.thoroughfare ?? '').isNotEmpty) p?.thoroughfare,
-        if ((p?.subLocality ?? '').isNotEmpty) p?.subLocality,
-        if ((p?.locality ?? '').isNotEmpty) p?.locality,
-        if ((p?.administrativeArea ?? '').isNotEmpty) p?.administrativeArea,
-        if ((p?.postalCode ?? '').isNotEmpty) p?.postalCode,
-        if ((p?.country ?? '').isNotEmpty) p?.country,
-      ].whereType<String>().join(', ');
-
-      return LocationInfo.fromPosition(
-          pos, address.isEmpty ? 'Location unavailable' : address);
     } catch (_) {
       return null;
     }

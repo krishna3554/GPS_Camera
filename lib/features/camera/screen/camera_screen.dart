@@ -11,7 +11,9 @@ import '../../../core/utils/location_utils.dart';
 import '../../../core/utils/permission_handler.dart';
 import '../../../core/widgets/location_stamp_card.dart';
 import '../../../models/captured_media.dart';
+import '../../../models/geo_photo_model.dart';
 import '../../../models/location_info.dart';
+import '../../../services/location_service.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key, this.permissionsGranted = true});
@@ -41,6 +43,8 @@ class _CameraScreenState extends State<CameraScreen>
   Duration _recordDuration = Duration.zero;
   late final AnimationController _captureAnim;
   bool _flashOverlay = false;
+  bool _isGeoProcessing = false;
+  final LocationService _locationService = const LocationService();
 
   @override
   void initState() {
@@ -171,19 +175,18 @@ class _CameraScreenState extends State<CameraScreen>
         });
         final file = await _controller!.takePicture();
         if (!mounted) return;
+        setState(() => _isGeoProcessing = true);
+
+        final locationInfo = await _resolveCaptureLocation();
+        if (!mounted) return;
+        setState(() => _isGeoProcessing = false);
+
         Navigator.pushNamed(
           context,
           AppConstants.routeResult,
           arguments: ResultScreenArgs(
             filePath: file.path,
-            locationInfo: _locationInfo ??
-                const LocationInfo(
-                  address: 'Location unavailable',
-                  date: '',
-                  time: '',
-                  latitude: 0,
-                  longitude: 0,
-                ),
+            locationInfo: locationInfo,
             type: MediaType.photo,
           ),
         );
@@ -199,6 +202,53 @@ class _CameraScreenState extends State<CameraScreen>
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Capture failed: $e')));
     }
+  }
+
+  Future<LocationInfo> _resolveCaptureLocation() async {
+    try {
+      final geoPhoto = await _locationService.getCurrentGeoPhoto();
+      return _locationInfoFromGeoPhoto(geoPhoto);
+    } on LocationServiceException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Location unavailable: $error')),
+        );
+      }
+    }
+
+    return _locationInfo ??
+        const LocationInfo(
+          address: 'Location unavailable',
+          date: '',
+          time: '',
+          latitude: 0,
+          longitude: 0,
+        );
+  }
+
+  LocationInfo _locationInfoFromGeoPhoto(GeoPhotoModel geoPhoto) {
+    return LocationInfo(
+      address: geoPhoto.address,
+      date: geoPhoto.capturedAt.toLocal().toString().split(' ').first,
+      time: geoPhoto.formattedDateTime.split('  ').last,
+      latitude: geoPhoto.latitude,
+      longitude: geoPhoto.longitude,
+      placeName: geoPhoto.placeName,
+      locality: geoPhoto.locality,
+      administrativeArea: geoPhoto.administrativeArea,
+      country: geoPhoto.country,
+      postalCode: geoPhoto.postalCode,
+      altitude: geoPhoto.altitude,
+      speedMetersPerSecond: geoPhoto.speedMetersPerSecond,
+      heading: geoPhoto.heading,
+      accuracy: geoPhoto.accuracy,
+    );
   }
 
   Future<void> _startRecording() async {
@@ -289,6 +339,28 @@ class _CameraScreenState extends State<CameraScreen>
                 opacity: _flashOverlay ? 0.7 : 0,
                 duration: const Duration(milliseconds: 100),
                 child: Container(color: Colors.white),
+              ),
+            ),
+          if (_isGeoProcessing)
+            Positioned.fill(
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.45),
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: Colors.white),
+                      SizedBox(height: 16),
+                      Text(
+                        'Getting GPS and address...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           _buildTopToolbar(),
