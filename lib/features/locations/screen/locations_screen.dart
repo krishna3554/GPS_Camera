@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:photo_manager/photo_manager.dart';
 
-import '../../../core/constants/app_constants.dart';
-import '../../../core/utils/media_saver.dart';
+import '../../../models/app_photo.dart';
+import '../../../services/app_photo_store.dart';
 import '../../gallery/screen/gallery_screen.dart';
 
 class LocationsScreen extends StatefulWidget {
@@ -13,8 +12,9 @@ class LocationsScreen extends StatefulWidget {
 }
 
 class _LocationsScreenState extends State<LocationsScreen> {
+  final AppPhotoStore _photoStore = const AppPhotoStore();
   bool _loading = true;
-  final Map<String, List<AssetEntity>> _grouped = {};
+  final Map<String, List<AppPhoto>> _grouped = {};
 
   @override
   void initState() {
@@ -23,23 +23,25 @@ class _LocationsScreenState extends State<LocationsScreen> {
   }
 
   Future<void> _load() async {
-    final permission = await PhotoManager.requestPermissionExtend();
-    if (!permission.isAuth) {
-      setState(() => _loading = false);
-      return;
+    final photos = await _photoStore.loadPhotos();
+    final grouped = <String, List<AppPhoto>>{};
+    for (final photo in photos) {
+      final address = photo.locationInfo.address;
+      if (address.isEmpty) continue;
+      final parts = address.split(',');
+      final city = parts.length > 1
+          ? parts[parts.length - 2].trim()
+          : parts.first.trim();
+      grouped.putIfAbsent(city, () => []).add(photo);
     }
 
-    final paths = await PhotoManager.getAssetPathList(type: RequestType.common);
-    final assets = await paths.first.getAssetListPaged(page: 0, size: 200);
-    for (final asset in assets) {
-      final info = await MediaSaver.loadMetadataForAsset(asset);
-      if (info == null || info.address.isEmpty) continue;
-      final parts = info.address.split(',');
-      final city = parts.length > 1 ? parts[parts.length - 2].trim() : parts.first.trim();
-      _grouped.putIfAbsent(city, () => []).add(asset);
-    }
-
-    if (mounted) setState(() => _loading = false);
+    if (!mounted) return;
+    setState(() {
+      _grouped
+        ..clear()
+        ..addAll(grouped);
+      _loading = false;
+    });
   }
 
   @override
@@ -50,25 +52,28 @@ class _LocationsScreenState extends State<LocationsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _grouped.isEmpty
               ? const Center(child: Text('No location data available yet'))
-              : ListView(
-                  children: _grouped.entries.map((entry) {
-                    return ListTile(
-                      title: Text(entry.key),
-                      subtitle: Text('${entry.value.length} photos/videos'),
-                      leading: FutureBuilder<AssetEntity?>(
-                        future: Future.value(entry.value.first),
-                        builder: (_, __) => const Icon(Icons.place),
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => GalleryScreen(filteredAssets: entry.value),
-                          ),
-                        );
-                      },
-                    );
-                  }).toList(),
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView(
+                    children: _grouped.entries.map((entry) {
+                      return ListTile(
+                        title: Text(entry.key),
+                        subtitle: Text('${entry.value.length} photos'),
+                        leading: const Icon(Icons.place),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) => GalleryScreen(
+                                filteredPhotos: entry.value,
+                                title: entry.key,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    }).toList(),
+                  ),
                 ),
     );
   }

@@ -7,7 +7,10 @@ import '../../../models/app_photo.dart';
 import '../../../services/app_photo_store.dart';
 
 class GalleryScreen extends StatefulWidget {
-  const GalleryScreen({super.key});
+  const GalleryScreen({super.key, this.filteredPhotos, this.title = 'My Photos'});
+
+  final List<AppPhoto>? filteredPhotos;
+  final String title;
 
   @override
   State<GalleryScreen> createState() => _GalleryScreenState();
@@ -21,10 +24,23 @@ class _GalleryScreenState extends State<GalleryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPhotos();
+    if (widget.filteredPhotos != null) {
+      _photos = widget.filteredPhotos!;
+      _loading = false;
+    } else {
+      _loadPhotos();
+    }
   }
 
   Future<void> _loadPhotos() async {
+    if (widget.filteredPhotos != null) {
+      setState(() {
+        _photos = widget.filteredPhotos!;
+        _loading = false;
+      });
+      return;
+    }
+
     setState(() => _loading = true);
     final photos = await _photoStore.loadPhotos();
     if (!mounted) return;
@@ -83,7 +99,7 @@ class _GalleryScreenState extends State<GalleryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Photos'),
+        title: Text(widget.title),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close),
