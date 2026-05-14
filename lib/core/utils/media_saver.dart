@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:exif/exif.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 import '../../models/location_info.dart';
@@ -14,7 +14,7 @@ class MediaSaver {
   }) async {
     try {
       final bytes = await File(filePath).readAsBytes();
-      final result = await ImageGallerySaver.saveImage(bytes);
+      final result = await ImageGallerySaverPlus.saveImage(bytes);
       await File('$filePath.gps.json')
           .writeAsString(jsonEncode(locationInfo.toJson()));
       return result['isSuccess'] == true;
@@ -28,7 +28,7 @@ class MediaSaver {
     required LocationInfo locationInfo,
   }) async {
     try {
-      final result = await ImageGallerySaver.saveFile(filePath);
+      final result = await ImageGallerySaverPlus.saveFile(filePath);
       await File('$filePath.gps.json')
           .writeAsString(jsonEncode(locationInfo.toJson()));
       return result['isSuccess'] == true;
