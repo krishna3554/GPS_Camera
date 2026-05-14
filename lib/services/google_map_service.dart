@@ -19,6 +19,7 @@ class GoogleMapService {
     int width = 640,
     int height = 420,
     int zoom = 16,
+    String mapStyle = 'satellite',
   }) {
     final controller = static_maps.StaticMapController(
       googleApiKey: _apiKey,
@@ -39,7 +40,7 @@ class GoogleMapService {
       queryParameters: {
         ...url.queryParameters,
         'scale': '2',
-        'maptype': 'hybrid',
+        'maptype': mapStyle == 'standard' ? 'roadmap' : mapStyle,
       },
     );
   }
@@ -49,6 +50,8 @@ class GoogleMapService {
     required double longitude,
     int width = 640,
     int height = 420,
+    int zoom = 16,
+    String mapStyle = 'satellite',
   }) async {
     if (_apiKey.trim().isEmpty || _apiKey == 'YOUR_API_KEY') {
       return null;
@@ -61,6 +64,8 @@ class GoogleMapService {
         longitude: longitude,
         width: width,
         height: height,
+        zoom: zoom,
+        mapStyle: mapStyle,
       ),
     );
 

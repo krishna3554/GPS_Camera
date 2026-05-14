@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../app.dart';
@@ -11,9 +12,11 @@ import '../../../core/utils/location_utils.dart';
 import '../../../core/utils/permission_handler.dart';
 import '../../../core/widgets/location_stamp_card.dart';
 import '../../../models/captured_media.dart';
+import '../../../models/app_settings.dart';
 import '../../../models/geo_photo_model.dart';
 import '../../../models/location_info.dart';
 import '../../../services/location_service.dart';
+import '../../../services/settings_service.dart';
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key, this.permissionsGranted = true});
@@ -31,20 +34,18 @@ class _CameraScreenState extends State<CameraScreen>
   bool _loading = true;
   bool _cameraError = false;
   bool _hasCameraPermission = false;
-  bool _isPhotoMode = true;
-  bool _isRecording = false;
+  AppSettings _settings = const AppSettings();
   FlashMode _flashMode = FlashMode.off;
   int _cameraIndex = 0;
   double _zoom = 1.0;
   double _baseZoom = 1.0;
   LocationInfo? _locationInfo;
   StreamSubscription<LocationInfo?>? _locationSub;
-  Timer? _recordTimer;
-  Duration _recordDuration = Duration.zero;
   late final AnimationController _captureAnim;
   bool _flashOverlay = false;
   bool _isGeoProcessing = false;
   final LocationService _locationService = const LocationService();
+  final SettingsService _settingsService = const SettingsService();
 
   @override
   void initState() {
@@ -58,7 +59,12 @@ class _CameraScreenState extends State<CameraScreen>
       value: 1,
     );
     _hasCameraPermission = widget.permissionsGranted;
-    _checkCameraPermissionAndInit();
+    _loadSettingsAndInit();
+  }
+
+  Future<void> _loadSettingsAndInit() async {
+    _settings = await _settingsService.load();
+    await _checkCameraPermissionAndInit();
   }
 
   Future<void> _checkCameraPermissionAndInit({bool request = false}) async {
@@ -146,7 +152,7 @@ class _CameraScreenState extends State<CameraScreen>
     _controller?.dispose();
     _controller = CameraController(
       _cameras[_cameraIndex],
-      ResolutionPreset.max,
+      _settings.resolutionPreset,
       enableAudio: false,
     );
     await _controller!.initialize();
@@ -156,10 +162,8 @@ class _CameraScreenState extends State<CameraScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused && _isRecording) {
-      _stopRecording();
-    } else if (state == AppLifecycleState.resumed) {
-      _checkCameraPermissionAndInit();
+    if (state == AppLifecycleState.resumed) {
+      _loadSettingsAndInit();
     }
   }
 
@@ -168,35 +172,27 @@ class _CameraScreenState extends State<CameraScreen>
     try {
       await _captureAnim.reverse();
       await _captureAnim.forward();
-      if (_isPhotoMode) {
-        setState(() => _flashOverlay = true);
-        Future<void>.delayed(const Duration(milliseconds: 200), () {
-          if (mounted) setState(() => _flashOverlay = false);
-        });
-        final file = await _controller!.takePicture();
-        if (!mounted) return;
-        setState(() => _isGeoProcessing = true);
+      setState(() => _flashOverlay = true);
+      Future<void>.delayed(const Duration(milliseconds: 200), () {
+        if (mounted) setState(() => _flashOverlay = false);
+      });
+      final file = await _controller!.takePicture();
+      if (!mounted) return;
+      setState(() => _isGeoProcessing = true);
 
-        final locationInfo = await _resolveCaptureLocation();
-        if (!mounted) return;
-        setState(() => _isGeoProcessing = false);
+      final locationInfo = await _resolveCaptureLocation();
+      if (!mounted) return;
+      setState(() => _isGeoProcessing = false);
 
-        Navigator.pushNamed(
-          context,
-          AppConstants.routeResult,
-          arguments: ResultScreenArgs(
-            filePath: file.path,
-            locationInfo: locationInfo,
-            type: MediaType.photo,
-          ),
-        );
-      } else {
-        if (_isRecording) {
-          await _stopRecording();
-        } else {
-          await _startRecording();
-        }
-      }
+      Navigator.pushNamed(
+        context,
+        AppConstants.routeResult,
+        arguments: ResultScreenArgs(
+          filePath: file.path,
+          locationInfo: locationInfo,
+          type: MediaType.photo,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -235,7 +231,7 @@ class _CameraScreenState extends State<CameraScreen>
   LocationInfo _locationInfoFromGeoPhoto(GeoPhotoModel geoPhoto) {
     return LocationInfo(
       address: geoPhoto.address,
-      date: geoPhoto.capturedAt.toLocal().toString().split(' ').first,
+      date: _formatCaptureDate(geoPhoto.capturedAt.toLocal()),
       time: geoPhoto.formattedDateTime.split('  ').last,
       latitude: geoPhoto.latitude,
       longitude: geoPhoto.longitude,
@@ -251,47 +247,14 @@ class _CameraScreenState extends State<CameraScreen>
     );
   }
 
-  Future<void> _startRecording() async {
-    await _controller!.startVideoRecording();
-    setState(() {
-      _isRecording = true;
-      _recordDuration = Duration.zero;
-    });
-    _recordTimer?.cancel();
-    _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        setState(() => _recordDuration += const Duration(seconds: 1));
-      }
-    });
-  }
-
-  Future<void> _stopRecording() async {
-    _recordTimer?.cancel();
-    final file = await _controller!.stopVideoRecording();
-    if (!mounted) return;
-    setState(() => _isRecording = false);
-    Navigator.pushNamed(
-      context,
-      AppConstants.routeResult,
-      arguments: ResultScreenArgs(
-        filePath: file.path,
-        locationInfo: _locationInfo ??
-            const LocationInfo(
-              address: 'Location unavailable',
-              date: '',
-              time: '',
-              latitude: 0,
-              longitude: 0,
-            ),
-        type: MediaType.video,
-      ),
-    );
+  String _formatCaptureDate(DateTime dateTime) {
+    final pattern = _settings.dateFormat == 'YYYY-MM-DD' ? 'yyyy-MM-dd' : 'dd/MM/yyyy';
+    return DateFormat(pattern).format(dateTime);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _recordTimer?.cancel();
     _locationSub?.cancel();
     _controller?.dispose();
     _captureAnim.dispose();
@@ -364,26 +327,11 @@ class _CameraScreenState extends State<CameraScreen>
               ),
             ),
           _buildTopToolbar(),
-          if (_isRecording)
-            Positioned(
-              top: 80,
-              left: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _recordDuration.toString().split('.').first,
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-            ),
           Positioned(
             left: 0,
             right: 0,
-            bottom: 180,
+            top: _settings.overlayPosition == 'top' ? 110 : null,
+            bottom: _settings.overlayPosition == 'bottom' ? 180 : null,
             child: Center(
               child: LocationStampCard(
                 locationInfo: _locationInfo,
@@ -437,14 +385,8 @@ class _CameraScreenState extends State<CameraScreen>
             ),
             const Icon(Icons.camera_alt, color: Colors.white),
             IconButton(
-              icon: const Icon(Icons.grid_view, color: Colors.white),
-              onPressed: () => showModalBottomSheet<void>(
-                context: context,
-                builder: (_) => const SizedBox(
-                  height: 150,
-                  child: Center(child: Text('Template selection coming soon')),
-                ),
-              ),
+              icon: const Icon(Icons.settings, color: Colors.white),
+              onPressed: () => Navigator.pushNamed(context, AppConstants.routeSettings),
             ),
             IconButton(
               icon: const Icon(Icons.workspace_premium, color: Colors.amber),
@@ -517,9 +459,7 @@ class _CameraScreenState extends State<CameraScreen>
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             border: Border.all(
-                                color: _isRecording
-                                    ? Colors.red
-                                    : AppColors.primary,
+                                color: AppColors.primary,
                                 width: 4),
                           ),
                           child: Center(
@@ -527,7 +467,7 @@ class _CameraScreenState extends State<CameraScreen>
                               width: 56,
                               height: 56,
                               decoration: BoxDecoration(
-                                color: _isRecording ? Colors.red : Colors.white,
+                                color: Colors.white,
                                 shape: BoxShape.circle,
                               ),
                             ),
@@ -535,20 +475,14 @@ class _CameraScreenState extends State<CameraScreen>
                         ),
                       ),
                     ),
-                    _nav('Template', Icons.dashboard),
-                    _nav('Settings', Icons.settings),
+                    _nav('Account', Icons.person_rounded,
+                        onTap: () => Navigator.pushNamed(context, AppConstants.routeAccount)),
+                    _nav('Settings', Icons.settings,
+                        onTap: () => Navigator.pushNamed(context, AppConstants.routeSettings)),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _mode('PHOTO', _isPhotoMode, () => setState(() => _isPhotoMode = true)),
-                    const SizedBox(width: 18),
-                    _mode('VIDEO', !_isPhotoMode,
-                        () => setState(() => _isPhotoMode = false)),
-                  ],
-                )
+                Center(child: _mode('PHOTO', true, () {}))
               ],
             ),
           ),
