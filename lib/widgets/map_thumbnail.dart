@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 class MapThumbnail extends StatelessWidget {
@@ -62,49 +63,26 @@ class MapThumbnail extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: <Widget>[
-            Image.network(
-              url,
+            CachedNetworkImage(
+              imageUrl: url,
               fit: BoxFit.cover,
-              loadingBuilder: (
-                BuildContext context,
-                Widget child,
-                ImageChunkEvent? loadingProgress,
-              ) {
-                if (loadingProgress == null) {
-                  debugPrint('[MapThumbnail] OpenStreetMap tile loaded successfully.');
-                  return child;
-                }
-
-                return const ColoredBox(
-                  color: Colors.black26,
-                  child: Center(
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+              fadeInDuration: const Duration(milliseconds: 120),
+              placeholder: (context, _) => const ColoredBox(
+                color: Colors.black26,
+                child: Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                );
-              },
-              errorBuilder: (
-                BuildContext context,
-                Object error,
-                StackTrace? stackTrace,
-              ) {
-                debugPrint('[MapThumbnail] Failed to load OpenStreetMap tile.');
-                debugPrint('[MapThumbnail] URL: $url');
-                debugPrint('[MapThumbnail] Error: $error');
-                if (stackTrace != null) {
-                  debugPrint('[MapThumbnail] StackTrace: $stackTrace');
-                }
-
-                return const ColoredBox(
-                  color: Colors.black45,
-                  child: Center(
-                    child: Icon(Icons.map_outlined, color: Colors.white70, size: 22),
-                  ),
-                );
-              },
+                ),
+              ),
+              errorWidget: (context, _, error) => const ColoredBox(
+                color: Colors.black45,
+                child: Center(
+                  child: Icon(Icons.map_outlined, color: Colors.white70, size: 22),
+                ),
+              ),
             ),
             const Center(
               child: Icon(

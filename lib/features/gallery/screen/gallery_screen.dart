@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../models/app_photo.dart';
 import '../../../services/app_photo_store.dart';
+import '../../../services/error_reporter.dart';
 
 class GalleryScreen extends StatefulWidget {
   const GalleryScreen({super.key, this.filteredPhotos, this.title = 'My Photos'});
@@ -42,12 +43,25 @@ class _GalleryScreenState extends State<GalleryScreen> {
     }
 
     setState(() => _loading = true);
-    final photos = await _photoStore.loadPhotos();
-    if (!mounted) return;
-    setState(() {
-      _photos = photos;
-      _loading = false;
-    });
+    try {
+      final photos = await _photoStore.loadPhotos();
+      if (!mounted) return;
+      setState(() {
+        _photos = photos;
+        _loading = false;
+      });
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Failed to load gallery photos.',
+      );
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not load saved photos. Pull to retry.')),
+      );
+    }
   }
 
   void _openPhoto(AppPhoto photo) {
@@ -59,11 +73,23 @@ class _GalleryScreenState extends State<GalleryScreen> {
   }
 
   Future<void> _sharePhoto(AppPhoto photo) async {
-    await Share.shareXFiles(
-      [XFile(photo.filePath)],
-      text:
-          '📍 ${photo.locationInfo.address}\n📅 ${photo.locationInfo.date} ${photo.locationInfo.time}\nCaptured with GPS Camera',
-    );
+    try {
+      await Share.shareXFiles(
+        [XFile(photo.filePath)],
+        text:
+            '📍 ${photo.locationInfo.address}\n📅 ${photo.locationInfo.date} ${photo.locationInfo.time}\nCaptured with GPS Camera',
+      );
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Failed to share gallery photo.',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not share this photo.')),
+      );
+    }
   }
 
   void _showActions(AppPhoto photo) {
@@ -143,19 +169,41 @@ class _GalleryScreenState extends State<GalleryScreen> {
                         onLongPress: () => _showActions(photo),
                         child: Hero(
                           tag: photo.id,
-                          child: Image.file(
-                            File(photo.filePath),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: Colors.black12,
-                              child: const Icon(Icons.broken_image),
-                            ),
-                          ),
+                          child: _LazyPhotoThumbnail(photo: photo),
                         ),
                       );
                     },
                   ),
                 ),
+    );
+  }
+}
+
+
+class _LazyPhotoThumbnail extends StatelessWidget {
+  const _LazyPhotoThumbnail({required this.photo});
+
+  final AppPhoto photo;
+
+  @override
+  Widget build(BuildContext context) {
+    final targetWidth = (MediaQuery.sizeOf(context).width / 3).round();
+    final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+    final cacheExtent = (targetWidth * pixelRatio).round();
+
+    return Image.file(
+      File(photo.filePath),
+      fit: BoxFit.cover,
+      cacheWidth: cacheExtent,
+      filterQuality: FilterQuality.low,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded || frame != null) return child;
+        return const ColoredBox(color: Colors.black12);
+      },
+      errorBuilder: (_, __, ___) => Container(
+        color: Colors.black12,
+        child: const Icon(Icons.broken_image),
+      ),
     );
   }
 }
@@ -170,12 +218,24 @@ class AppPhotoViewer extends StatelessWidget {
   final AppPhoto photo;
   final AppPhotoStore photoStore;
 
-  Future<void> _share() async {
-    await Share.shareXFiles(
-      [XFile(photo.filePath)],
-      text:
-          '📍 ${photo.locationInfo.address}\n📅 ${photo.locationInfo.date} ${photo.locationInfo.time}\nCaptured with GPS Camera',
-    );
+  Future<void> _share(BuildContext context) async {
+    try {
+      await Share.shareXFiles(
+        [XFile(photo.filePath)],
+        text:
+            '📍 ${photo.locationInfo.address}\n📅 ${photo.locationInfo.date} ${photo.locationInfo.time}\nCaptured with GPS Camera',
+      );
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Failed to share photo from viewer.',
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not share this photo.')),
+      );
+    }
   }
 
   Future<void> _delete(BuildContext context) async {
@@ -197,8 +257,20 @@ class AppPhotoViewer extends StatelessWidget {
       ),
     );
     if (confirm != true || !context.mounted) return;
-    await photoStore.deletePhoto(photo);
-    if (context.mounted) Navigator.pop(context);
+    try {
+      await photoStore.deletePhoto(photo);
+      if (context.mounted) Navigator.pop(context);
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Failed to delete saved photo.',
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not delete this photo.')),
+      );
+    }
   }
 
   @override
@@ -230,7 +302,7 @@ class AppPhotoViewer extends StatelessWidget {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: _share,
+                  onPressed: () => _share(context),
                   icon: const Icon(Icons.share, color: Colors.white),
                 ),
                 IconButton(
