@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 
@@ -12,6 +14,8 @@ import 'features/settings/screen/settings_screen.dart';
 import 'features/account/screen/account_screen.dart';
 import 'models/app_settings.dart';
 import 'services/settings_service.dart';
+import 'services/backup_service.dart';
+import 'services/error_reporter.dart';
 import 'models/captured_media.dart';
 import 'models/location_info.dart';
 
@@ -45,13 +49,40 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   AppSettings _settings = const AppSettings();
+  final BackupService _backupService = BackupService();
+  StreamSubscription<bool>? _backupRetrySub;
+  String? _settingsError;
 
   @override
   void initState() {
     super.initState();
-    const SettingsService().load().then((settings) {
-      if (mounted) setState(() => _settings = settings);
-    });
+    _backupRetrySub = _backupService.startAutoRetry(userId: 'local-device');
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final settings = await const SettingsService().load();
+      if (!mounted) return;
+      setState(() {
+        _settings = settings;
+        _settingsError = null;
+      });
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Failed to load app settings.',
+      );
+      if (!mounted) return;
+      setState(() => _settingsError = 'Using default settings. Saved preferences could not be loaded.');
+    }
+  }
+
+  @override
+  void dispose() {
+    _backupRetrySub?.cancel();
+    super.dispose();
   }
 
   @override
@@ -70,6 +101,14 @@ class _MyAppState extends State<MyApp> {
         AppConstants.routeLocations: (_) => const LocationsScreen(),
         AppConstants.routeSettings: (_) => const SettingsScreen(),
         AppConstants.routeAccount: (_) => const AccountScreen(),
+      },
+      builder: (context, child) {
+        if (_settingsError == null || child == null) return child ?? const SizedBox.shrink();
+        return Banner(
+          message: 'Settings warning',
+          location: BannerLocation.topEnd,
+          child: child,
+        );
       },
       onGenerateRoute: (settings) {
         if (settings.name == AppConstants.routeDetail) {

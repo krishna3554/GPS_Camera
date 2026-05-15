@@ -35,7 +35,7 @@ class ImageOverlayService {
     _drawWatermark(normalized, appName);
     _drawOverlayCard(normalized, geoPhoto, mapImage);
 
-    final outputBytes = Uint8List.fromList(img.encodeJpg(normalized, quality: 95));
+    final outputBytes = Uint8List.fromList(img.encodeJpg(normalized, quality: 85));
     final directory = await getTemporaryDirectory();
     final name = 'geo_photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
     final outputFile = File(p.join(directory.path, name));

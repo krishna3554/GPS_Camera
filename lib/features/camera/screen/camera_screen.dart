@@ -16,6 +16,7 @@ import '../../../models/app_settings.dart';
 import '../../../models/geo_photo_model.dart';
 import '../../../models/location_info.dart';
 import '../../../services/location_service.dart';
+import '../../../services/error_reporter.dart';
 import '../../../services/settings_service.dart';
 
 class CameraScreen extends StatefulWidget {
@@ -44,6 +45,7 @@ class _CameraScreenState extends State<CameraScreen>
   late final AnimationController _captureAnim;
   bool _flashOverlay = false;
   bool _isGeoProcessing = false;
+  String? _cameraErrorMessage;
   final LocationService _locationService = const LocationService();
   final SettingsService _settingsService = const SettingsService();
 
@@ -63,23 +65,54 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   Future<void> _loadSettingsAndInit() async {
-    _settings = await _settingsService.load();
-    await _checkCameraPermissionAndInit();
+    try {
+      _settings = await _settingsService.load();
+      await _checkCameraPermissionAndInit();
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Failed to load camera settings or initialize camera.',
+      );
+      if (!mounted) return;
+      setState(() {
+        _cameraError = true;
+        _cameraErrorMessage = 'Camera could not start. Please try again.';
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _checkCameraPermissionAndInit({bool request = false}) async {
     if (!mounted) return;
     setState(() => _loading = true);
 
-    final granted = request
-        ? await AppPermissionHandler.checkAndRequestCamera()
-        : await AppPermissionHandler.hasCameraPermission();
+    final bool granted;
+    try {
+      granted = request
+          ? await AppPermissionHandler.checkAndRequestCamera()
+          : await AppPermissionHandler.hasCameraPermission();
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Failed to check camera permission.',
+      );
+      if (!mounted) return;
+      setState(() {
+        _hasCameraPermission = false;
+        _cameraErrorMessage = 'Unable to check camera permission.';
+        _loading = false;
+      });
+      return;
+    }
 
     if (!mounted) return;
     if (!granted) {
       setState(() {
         _hasCameraPermission = false;
         _cameraError = false;
+        _cameraErrorMessage = null;
         _loading = false;
       });
       return;
@@ -93,9 +126,17 @@ class _CameraScreenState extends State<CameraScreen>
     await _checkCameraPermissionAndInit(request: true);
     if (!mounted || _hasCameraPermission) return;
 
-    final status = await Permission.camera.status;
-    if (status.isPermanentlyDenied || status.isRestricted) {
-      await openAppSettings();
+    try {
+      final status = await Permission.camera.status;
+      if (status.isPermanentlyDenied || status.isRestricted) {
+        await openAppSettings();
+      }
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Failed to open app settings for camera permission.',
+      );
     }
   }
 
@@ -104,23 +145,39 @@ class _CameraScreenState extends State<CameraScreen>
     setState(() {
       _loading = true;
       _cameraError = false;
+      _cameraErrorMessage = null;
     });
     try {
       _cameras = await availableCameras();
       if (_cameras.isEmpty) {
         setState(() {
           _cameraError = true;
+          _cameraErrorMessage = 'No camera was found on this device.';
           _loading = false;
         });
         return;
       }
       await _initController();
       _locationSub?.cancel();
-      _locationSub = LocationUtils.locationStream().listen((value) {
-        if (!mounted) return;
-        setState(() => _locationInfo = value);
-      });
-    } on CameraException catch (e) {
+      _locationSub = LocationUtils.locationStream().listen(
+        (value) {
+          if (!mounted) return;
+          setState(() => _locationInfo = value);
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          ErrorReporter.recordError(
+            error,
+            stackTrace,
+            reason: 'Live location stream failed.',
+          );
+        },
+      );
+    } on CameraException catch (e, stackTrace) {
+      await ErrorReporter.recordError(
+        e,
+        stackTrace,
+        reason: 'Camera initialization failed.',
+      );
       if (e.code == 'CameraAccessDenied' ||
           e.code == 'CameraAccessDeniedWithoutPrompt' ||
           e.code == 'CameraAccessRestricted') {
@@ -128,21 +185,47 @@ class _CameraScreenState extends State<CameraScreen>
         setState(() {
           _hasCameraPermission = false;
           _cameraError = false;
+          _cameraErrorMessage = 'Camera permission is required to take photos.';
         });
       } else {
         await Future<void>.delayed(const Duration(seconds: 1));
         try {
           await _initController();
-        } catch (_) {
-          if (mounted) setState(() => _cameraError = true);
+        } catch (retryError, retryStackTrace) {
+          await ErrorReporter.recordError(
+            retryError,
+            retryStackTrace,
+            reason: 'Camera initialization retry failed.',
+          );
+          if (mounted) {
+            setState(() {
+              _cameraError = true;
+              _cameraErrorMessage = 'Camera is temporarily unavailable.';
+            });
+          }
         }
       }
-    } catch (_) {
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Unexpected camera initialization failure.',
+      );
       await Future<void>.delayed(const Duration(seconds: 1));
       try {
         await _initController();
-      } catch (_) {
-        if (mounted) setState(() => _cameraError = true);
+      } catch (retryError, retryStackTrace) {
+        await ErrorReporter.recordError(
+          retryError,
+          retryStackTrace,
+          reason: 'Unexpected camera initialization retry failure.',
+        );
+        if (mounted) {
+          setState(() {
+            _cameraError = true;
+            _cameraErrorMessage = 'Camera is temporarily unavailable.';
+          });
+        }
       }
     }
     if (mounted) setState(() => _loading = false);
@@ -193,10 +276,16 @@ class _CameraScreenState extends State<CameraScreen>
           type: MediaType.photo,
         ),
       );
-    } catch (e) {
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Photo capture failed.',
+      );
       if (!mounted) return;
+      setState(() => _isGeoProcessing = false);
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Capture failed: $e')));
+          .showSnackBar(SnackBar(content: Text('Capture failed: $error')));
     }
   }
 
@@ -204,13 +293,23 @@ class _CameraScreenState extends State<CameraScreen>
     try {
       final geoPhoto = await _locationService.getCurrentGeoPhoto();
       return _locationInfoFromGeoPhoto(geoPhoto);
-    } on LocationServiceException catch (error) {
+    } on LocationServiceException catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Location service returned a handled capture error.',
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error.message)),
         );
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Unexpected location resolution failure.',
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Location unavailable: $error')),
@@ -275,7 +374,7 @@ class _CameraScreenState extends State<CameraScreen>
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.camera_alt_outlined, size: 56),
             const SizedBox(height: 8),
-            const Text('Camera not available on this device'),
+            Text(_cameraErrorMessage ?? 'Camera not available on this device'),
             FilledButton(onPressed: _init, child: const Text('Restart Camera')),
           ]),
         ),

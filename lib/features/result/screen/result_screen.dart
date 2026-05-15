@@ -11,6 +11,9 @@ import '../../../models/geo_photo_model.dart';
 import '../../../models/location_info.dart';
 import '../../../models/app_photo.dart';
 import '../../../services/app_photo_store.dart';
+import '../../../services/backup_service.dart';
+import '../../../services/error_reporter.dart';
+import '../../../services/image_compression_service.dart';
 import '../../../services/gallery_service.dart';
 import '../../../services/google_map_service.dart';
 import '../../../services/image_overlay_service.dart';
@@ -35,8 +38,10 @@ class ResultScreen extends StatefulWidget {
 class _ResultScreenState extends State<ResultScreen> {
   final AppPhotoStore _photoStore = const AppPhotoStore();
   final GalleryService _galleryService = const GalleryService();
+  final BackupService _backupService = BackupService();
   final GoogleMapService _googleMapService = const GoogleMapService();
   final ImageOverlayService _imageOverlayService = const ImageOverlayService();
+  final ImageCompressionService _imageCompressionService = const ImageCompressionService();
   final SettingsService _settingsService = const SettingsService();
 
   bool _showBanner = false;
@@ -61,7 +66,12 @@ class _ResultScreenState extends State<ResultScreen> {
       } else {
         _showSaveError();
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Failed to initialize result screen.',
+      );
       if (!mounted) return;
       _showSaveError('Failed to generate geo-tagged photo: $error');
     } finally {
@@ -74,6 +84,9 @@ class _ResultScreenState extends State<ResultScreen> {
   Future<String?> _generateAndSaveGeoTaggedPhoto() async {
     final settings = await _settingsService.load();
     final geoPhoto = _geoPhotoFromLocationInfo(widget.locationInfo);
+    final compressedCapturePath = await _imageCompressionService.compressPhotoFile(
+      widget.filePath,
+    );
     Uint8List? mapBytes;
     try {
       mapBytes = await _googleMapService.fetchThumbnail(
@@ -82,13 +95,18 @@ class _ResultScreenState extends State<ResultScreen> {
         zoom: settings.mapZoomLevel.round(),
         mapStyle: settings.mapStyle,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
       // Keep saving functional if the static map request fails offline or by API quota.
+      await ErrorReporter.recordError(
+        error,
+        stackTrace,
+        reason: 'Static map thumbnail unavailable; continuing with offline fallback.',
+      );
       mapBytes = null;
     }
 
     final finalResult = await _imageOverlayService.composeGeoTaggedImage(
-      capturedImagePath: widget.filePath,
+      capturedImagePath: compressedCapturePath,
       geoPhoto: geoPhoto,
       mapThumbnailBytes: mapBytes,
     );
@@ -100,14 +118,14 @@ class _ResultScreenState extends State<ResultScreen> {
             name: 'GPS_Map_Camera_${DateTime.now().millisecondsSinceEpoch}',
           )
         : finalResult.filePath;
-    await _photoStore.addPhoto(
-      AppPhoto(
-        id: DateTime.now().microsecondsSinceEpoch.toString(),
-        filePath: finalResult.filePath,
-        locationInfo: widget.locationInfo,
-        capturedAt: DateTime.now(),
-      ),
+    final appPhoto = AppPhoto(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      filePath: finalResult.filePath,
+      locationInfo: widget.locationInfo,
+      capturedAt: DateTime.now(),
     );
+    await _photoStore.addPhoto(appPhoto);
+    await _backupService.queuePhotoForBackup(appPhoto);
     return savedPath;
   }
 
