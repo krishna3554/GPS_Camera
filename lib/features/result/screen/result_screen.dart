@@ -109,6 +109,7 @@ class _ResultScreenState extends State<ResultScreen> {
       capturedImagePath: compressedCapturePath,
       geoPhoto: geoPhoto,
       mapThumbnailBytes: mapBytes,
+      overlayTemplate: settings.overlayTemplate,
     );
 
     if (mounted) setState(() => _displayFilePath = finalResult.filePath);
