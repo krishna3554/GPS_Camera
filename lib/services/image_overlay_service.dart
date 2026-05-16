@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../models/app_settings.dart';
 import '../models/geo_photo_model.dart';
 import '../utils/image_utils.dart';
 
@@ -18,6 +19,7 @@ class ImageOverlayService {
     required GeoPhotoModel geoPhoto,
     Uint8List? mapThumbnailBytes,
     String appName = 'GPS Map Camera',
+    String overlayTemplate = OverlayTemplateIds.classicDark,
   }) async {
     final sourceFile = File(capturedImagePath);
     final sourceBytes = await sourceFile.readAsBytes();
@@ -33,7 +35,7 @@ class ImageOverlayService {
     }
 
     _drawWatermark(normalized, appName);
-    _drawOverlayCard(normalized, geoPhoto, mapImage);
+    _drawOverlayCard(normalized, geoPhoto, mapImage, overlayTemplate);
 
     final outputBytes = Uint8List.fromList(img.encodeJpg(normalized, quality: 85));
     final directory = await getTemporaryDirectory();
@@ -52,9 +54,18 @@ class ImageOverlayService {
     img.Image image,
     GeoPhotoModel geoPhoto,
     img.Image? mapImage,
+    String overlayTemplate,
   ) {
     final width = image.width;
     final height = image.height;
+    if (overlayTemplate == OverlayTemplateIds.minimalStrip) {
+      _drawMinimalStrip(image, geoPhoto);
+      return;
+    }
+    if (overlayTemplate == OverlayTemplateIds.fieldReport) {
+      _drawFieldReportCard(image, geoPhoto, mapImage);
+      return;
+    }
     final margin = (width * 0.045).round().clamp(28, 96);
     final cardWidth = width - (margin * 2);
     final cardHeight = (height * 0.23).round().clamp(310, 620);
@@ -89,8 +100,8 @@ class ImageOverlayService {
     final textLeft = mapLeft + mapWidth + inner;
     final textTop = mapTop + (mapHeight * 0.03).round();
     final textWidth = margin + cardWidth - inner - textLeft;
-    final titleFont = width >= 2200 ? img.arial48 : img.arial24;
-    final bodyFont = width >= 2200 ? img.arial24 : img.arial14;
+    final titleFont = width >= 1800 ? img.arial48 : img.arial24;
+    final bodyFont = img.arial24;
     final titleColor = img.ColorRgb8(255, 255, 255);
     final bodyColor = img.ColorRgb8(235, 238, 242);
     final mutedColor = img.ColorRgb8(210, 215, 222);
@@ -128,7 +139,7 @@ class ImageOverlayService {
       font: bodyFont,
       x: textLeft,
       y: cursorY,
-      color: bodyColor,
+      color: img.ColorRgb8(128, 216, 255),
     );
     cursorY += lineHeight;
 
@@ -158,6 +169,100 @@ class ImageOverlayService {
     _drawFooterMetric(image, 'C', geoPhoto.headingLabel, textLeft + (textWidth * 0.25).round(), footerY, img.ColorRgb8(130, 220, 255), bodyColor, bodyFont);
     _drawFooterMetric(image, 'S', geoPhoto.speedLabel, textLeft + (textWidth * 0.50).round(), footerY, img.ColorRgb8(0, 210, 255), bodyColor, bodyFont);
     _drawFooterMetric(image, 'A', geoPhoto.altitudeLabel, textLeft + (textWidth * 0.75).round(), footerY, img.ColorRgb8(255, 160, 80), bodyColor, bodyFont);
+  }
+
+
+  void _drawMinimalStrip(img.Image image, GeoPhotoModel geoPhoto) {
+    final width = image.width;
+    final height = image.height;
+    final margin = (width * 0.04).round().clamp(24, 90);
+    final stripHeight = (height * 0.105).round().clamp(120, 230);
+    final y = height - stripHeight - (height * 0.035).round();
+    final font = width >= 2200 ? img.arial48 : img.arial24;
+    final smallFont = width >= 2200 ? img.arial24 : img.arial14;
+
+    ImageUtils.fillRoundedRect(
+      image,
+      x: margin,
+      y: y,
+      width: width - (margin * 2),
+      height: stripHeight,
+      radius: (stripHeight * .28).round(),
+      color: img.ColorRgba8(0, 0, 0, 198),
+    );
+    img.drawString(image, '•', font: font, x: margin + 28, y: y + ((stripHeight - font.lineHeight) ~/ 2), color: img.ColorRgb8(245, 166, 35));
+    ImageUtils.drawWrappedText(
+      image,
+      geoPhoto.address,
+      font: font,
+      x: margin + 72,
+      y: y + (stripHeight * .18).round(),
+      maxWidth: (width * .55).round(),
+      color: img.ColorRgb8(255, 255, 255),
+      maxLines: 1,
+    );
+    img.drawString(
+      image,
+      geoPhoto.formattedDateTime,
+      font: smallFont,
+      x: width - margin - (width * .28).round(),
+      y: y + ((stripHeight - smallFont.lineHeight) ~/ 2),
+      color: img.ColorRgb8(220, 226, 232),
+    );
+  }
+
+  void _drawFieldReportCard(img.Image image, GeoPhotoModel geoPhoto, img.Image? mapImage) {
+    final width = image.width;
+    final height = image.height;
+    final margin = (width * 0.045).round().clamp(28, 96);
+    final cardWidth = width - (margin * 2);
+    final cardHeight = (height * 0.28).round().clamp(390, 720);
+    final cardTop = height - cardHeight - (height * 0.035).round();
+    final inner = (cardHeight * 0.075).round().clamp(24, 50);
+
+    ImageUtils.fillRoundedRect(
+      image,
+      x: margin,
+      y: cardTop,
+      width: cardWidth,
+      height: cardHeight,
+      radius: (cardHeight * 0.08).round().clamp(24, 48),
+      color: img.ColorRgba8(8, 14, 20, 214),
+    );
+
+    final mapSize = cardHeight - (inner * 2);
+    final mapLeft = margin + inner;
+    final mapTop = cardTop + inner;
+    _drawMapPreview(image, mapImage, x: mapLeft, y: mapTop, width: mapSize, height: mapSize);
+
+    final textLeft = mapLeft + mapSize + inner;
+    final textWidth = margin + cardWidth - inner - textLeft;
+    final titleFont = width >= 1800 ? img.arial48 : img.arial24;
+    final bodyFont = img.arial24;
+    final badgeFont = img.arial14;
+    var cursorY = mapTop;
+
+    ImageUtils.fillRoundedRect(
+      image,
+      x: textLeft,
+      y: cursorY,
+      width: (textWidth * .34).round(),
+      height: (bodyFont.lineHeight * 1.8).round(),
+      radius: bodyFont.lineHeight,
+      color: img.ColorRgba8(29, 185, 84, 70),
+    );
+    img.drawString(image, 'GPS-STAMPED', font: badgeFont, x: textLeft + 18, y: cursorY + 10, color: img.ColorRgb8(141, 255, 176));
+    cursorY += (bodyFont.lineHeight * 2.4).round();
+
+    ImageUtils.drawWrappedText(image, geoPhoto.address, font: titleFont, x: textLeft, y: cursorY, maxWidth: textWidth, color: img.ColorRgb8(255, 255, 255), maxLines: 2);
+    cursorY += (titleFont.lineHeight * 2.2).round();
+    img.drawLine(image, x1: textLeft, y1: cursorY, x2: textLeft + textWidth, y2: cursorY, color: img.ColorRgba8(255, 255, 255, 55), thickness: 2);
+    cursorY += (bodyFont.lineHeight * .8).round();
+    img.drawString(image, 'COORDINATES', font: bodyFont, x: textLeft, y: cursorY, color: img.ColorRgb8(128, 216, 255));
+    cursorY += (bodyFont.lineHeight * 1.25).round();
+    img.drawString(image, '${geoPhoto.formattedLatitude}°, ${geoPhoto.formattedLongitude}°', font: titleFont, x: textLeft, y: cursorY, color: img.ColorRgb8(128, 216, 255));
+    cursorY += (titleFont.lineHeight * 1.45).round();
+    img.drawString(image, geoPhoto.formattedDateTime, font: bodyFont, x: textLeft, y: cursorY, color: img.ColorRgb8(224, 231, 238));
   }
 
   void _drawMapPreview(
@@ -218,12 +323,12 @@ class ImageOverlayService {
   void _drawWatermark(img.Image image, String appName) {
     final width = image.width;
     final height = image.height;
-    final font = width >= 2200 ? img.arial24 : img.arial14;
+    final font = img.arial14;
     final label = appName;
-    final boxWidth = (width * 0.31).round().clamp(300, 700);
-    final boxHeight = (height * 0.045).round().clamp(54, 100);
-    final x = width - boxWidth - (width * 0.05).round();
-    final y = height - (height * 0.32).round();
+    final boxWidth = (width * 0.22).round().clamp(230, 520);
+    final boxHeight = (height * 0.032).round().clamp(42, 72);
+    final x = width - boxWidth - (width * 0.045).round();
+    final y = height - (height * 0.30).round();
 
     ImageUtils.fillRoundedRect(
       image,
@@ -238,7 +343,7 @@ class ImageOverlayService {
       image,
       x: x + (boxHeight ~/ 2),
       y: y + (boxHeight ~/ 2),
-      radius: (boxHeight * 0.28).round(),
+      radius: (boxHeight * 0.22).round(),
       color: img.ColorRgb8(255, 204, 0),
     );
     img.drawString(

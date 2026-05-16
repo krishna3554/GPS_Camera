@@ -393,7 +393,7 @@ class _CameraScreenState extends State<CameraScreen>
               _zoom = next;
               await _controller!.setZoomLevel(next);
             },
-            child: CameraPreview(_controller!),
+            child: _CameraPreviewCover(controller: _controller!),
           ),
           if (_flashOverlay)
             IgnorePointer(
@@ -434,7 +434,8 @@ class _CameraScreenState extends State<CameraScreen>
             child: Center(
               child: LocationStampCard(
                 locationInfo: _locationInfo,
-                cardWidth: MediaQuery.of(context).size.width * 0.8,
+                settings: _settings,
+                cardWidth: MediaQuery.of(context).size.width * 0.9,
               ),
             ),
           ),
@@ -576,8 +577,8 @@ class _CameraScreenState extends State<CameraScreen>
                     ),
                     _nav('Account', Icons.person_rounded,
                         onTap: () => Navigator.pushNamed(context, AppConstants.routeAccount)),
-                    _nav('Settings', Icons.settings,
-                        onTap: () => Navigator.pushNamed(context, AppConstants.routeSettings)),
+                    _nav('Templates', Icons.dashboard_customize,
+                        onTap: _showTemplateSheet),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -588,6 +589,46 @@ class _CameraScreenState extends State<CameraScreen>
         ],
       ),
     );
+  }
+
+
+  Future<void> _showTemplateSheet() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: const Color(0xFF101010),
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Overlay Templates',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              ...OverlayTemplateIds.all.map(
+                (id) => _TemplateChoiceTile(
+                  id: id,
+                  selected: _settings.overlayTemplate == id,
+                  locationInfo: _locationInfo,
+                  settings: _settings.copyWith(overlayTemplate: id),
+                  onTap: () => Navigator.pop(context, id),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (selected == null || selected == _settings.overlayTemplate) return;
+    final next = _settings.copyWith(overlayTemplate: selected);
+    await _settingsService.save(next);
+    if (!mounted) return;
+    setState(() => _settings = next);
   }
 
   Widget _mode(String label, bool selected, VoidCallback onTap) => GestureDetector(
@@ -615,6 +656,112 @@ class _CameraScreenState extends State<CameraScreen>
           ],
         ),
       );
+}
+
+
+class _CameraPreviewCover extends StatelessWidget {
+  const _CameraPreviewCover({required this.controller});
+
+  final CameraController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewSize = controller.value.previewSize;
+    if (previewSize == null) return CameraPreview(controller);
+
+    final portraitPreviewSize = Size(previewSize.height, previewSize.width);
+    return ClipRect(
+      child: SizedBox.expand(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: portraitPreviewSize.width,
+            height: portraitPreviewSize.height,
+            child: CameraPreview(controller),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TemplateChoiceTile extends StatelessWidget {
+  const _TemplateChoiceTile({
+    required this.id,
+    required this.selected,
+    required this.locationInfo,
+    required this.settings,
+    required this.onTap,
+  });
+
+  final String id;
+  final bool selected;
+  final LocationInfo? locationInfo;
+  final AppSettings settings;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewInfo = locationInfo ??
+        const LocationInfo(
+          address: '123 Market Street, Springfield',
+          date: '05/16/2026',
+          time: '10:24 AM',
+          latitude: 37.42199,
+          longitude: -122.08406,
+        );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary.withValues(alpha: 0.16) : Colors.white.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: selected ? AppColors.primary : Colors.white12, width: selected ? 2 : 1),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 122,
+                height: 82,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: const LinearGradient(colors: [Color(0xFF263238), Color(0xFF101010)]),
+                ),
+                child: LocationStampCard(
+                  locationInfo: previewInfo,
+                  settings: settings,
+                  compactPreview: true,
+                  cardWidth: 112,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(OverlayTemplateIds.label(id), style: const TextStyle(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    Text(
+                      OverlayTemplateIds.description(id),
+                      style: TextStyle(color: Colors.white.withValues(alpha: .72), fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected) const Icon(Icons.check_circle, color: AppColors.primary),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _PermissionUI extends StatelessWidget {
