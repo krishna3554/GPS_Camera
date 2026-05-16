@@ -12,6 +12,7 @@ class SettingsService {
   static const dateFormatKey = 'settings_date_format';
   static const mapZoomLevelKey = 'settings_map_zoom_level';
   static const darkThemeKey = 'settings_dark_theme';
+  static const overlayTemplateKey = 'settings_overlay_template';
 
   const SettingsService();
 
@@ -28,6 +29,7 @@ class SettingsService {
       dateFormat: prefs.getString(dateFormatKey) ?? 'DD/MM/YYYY',
       mapZoomLevel: prefs.getDouble(mapZoomLevelKey) ?? 15,
       darkTheme: prefs.getBool(darkThemeKey) ?? true,
+      overlayTemplate: prefs.getString(overlayTemplateKey) ?? OverlayTemplateIds.classicDark,
     );
   }
 
@@ -43,5 +45,6 @@ class SettingsService {
     await prefs.setString(dateFormatKey, settings.dateFormat);
     await prefs.setDouble(mapZoomLevelKey, settings.mapZoomLevel);
     await prefs.setBool(darkThemeKey, settings.darkTheme);
+    await prefs.setString(overlayTemplateKey, settings.overlayTemplate);
   }
 }

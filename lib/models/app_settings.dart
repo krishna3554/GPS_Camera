@@ -1,6 +1,26 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
+class OverlayTemplateIds {
+  static const classicDark = 'classic_dark';
+  static const minimalStrip = 'minimal_strip';
+  static const fieldReport = 'field_report';
+
+  static const all = [classicDark, minimalStrip, fieldReport];
+
+  static String label(String id) => switch (id) {
+        minimalStrip => 'Minimal Strip',
+        fieldReport => 'Field Report',
+        _ => 'Classic Dark',
+      };
+
+  static String description(String id) => switch (id) {
+        minimalStrip => 'Slim address and time strip without a map.',
+        fieldReport => 'Structured GPS-stamped field documentation card.',
+        _ => 'Map thumbnail with metadata on a dark card.',
+      };
+}
+
 class AppSettings {
   const AppSettings({
     this.mapStyle = 'standard',
@@ -12,6 +32,7 @@ class AppSettings {
     this.dateFormat = 'DD/MM/YYYY',
     this.mapZoomLevel = 15,
     this.darkTheme = true,
+    this.overlayTemplate = OverlayTemplateIds.classicDark,
   });
 
   final String mapStyle;
@@ -23,6 +44,7 @@ class AppSettings {
   final String dateFormat;
   final double mapZoomLevel;
   final bool darkTheme;
+  final String overlayTemplate;
 
   ResolutionPreset get resolutionPreset => switch (photoQuality) {
         'medium' => ResolutionPreset.medium,
@@ -42,6 +64,7 @@ class AppSettings {
     String? dateFormat,
     double? mapZoomLevel,
     bool? darkTheme,
+    String? overlayTemplate,
   }) {
     return AppSettings(
       mapStyle: mapStyle ?? this.mapStyle,
@@ -54,6 +77,7 @@ class AppSettings {
       dateFormat: dateFormat ?? this.dateFormat,
       mapZoomLevel: mapZoomLevel ?? this.mapZoomLevel,
       darkTheme: darkTheme ?? this.darkTheme,
+      overlayTemplate: overlayTemplate ?? this.overlayTemplate,
     );
   }
 }
