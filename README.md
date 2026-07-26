@@ -1,150 +1,163 @@
-# GPS Camera (Flutter)
+# GPS Camera
 
-GPS Camera is a Flutter app for capturing photos/videos with GPS metadata, previewing captures in a gallery, and viewing stamped location details.
+GPS Camera is a Flutter mobile app for capturing photos and videos with location context. It combines a camera-first capture flow, live GPS stamping, a media gallery, map/location views, sharing, and local metadata persistence for geotagged memories.
 
-## What changed in the redesign
+## Highlights
 
-The app has been restructured around a new clean-feature layout and UI refresh:
+- **Photo and video capture** with front/back camera switching, flash controls, zoom presets, and animated capture feedback.
+- **Live GPS stamp overlay** showing address, coordinates, date, and time while capturing media.
+- **Map previews** powered by OpenStreetMap through `flutter_map`, with Google Maps service support available in the codebase.
+- **Gallery management** with grid thumbnails, video duration badges, multi-select, delete, and share actions.
+- **Detail and result screens** for reviewing captures, playing video, exporting QR map links, saving to the camera roll, and sharing media.
+- **Metadata sidecars** (`.gps.json`) to preserve captured location details alongside saved media.
+- **Settings, account, and locations screens** for app configuration and navigation beyond the primary capture/gallery flows.
 
-- **Material 3 theme** with orange primary (`#F5A623`).
-- **Camera-first flow** with:
-  - full-screen preview,
-  - photo/video mode toggle,
-  - zoom controls (`0.5x`, `1x`, `2x`),
-  - flash/front-back camera controls,
-  - animated capture feedback.
-- **Live location stamp card** overlay:
-  - address + date + time,
-  - mini map thumbnail (OpenStreetMap via `flutter_map`).
-- **Gallery experience**:
-  - grid thumbnails,
-  - video duration badges,
-  - multi-select, delete, and share.
-- **Detail view**:
-  - swipable media pages,
-  - play/pause video UI,
-  - QR code export for map links,
-  - share/delete actions.
-- **Result screen**:
-  - auto-save to camera roll,
-  - success banner,
-  - one-tap share CTA.
-- **Metadata sidecar support** (`.gps.json`) for location persistence.
+## Tech stack
 
-## Project structure (new)
+- **Framework:** Flutter / Dart
+- **Camera:** `camera`
+- **Location:** `geolocator`, `geocoding`
+- **Maps:** `flutter_map`, `latlong2`, plus Google Maps-related dependencies
+- **Media:** `photo_manager`, `image_gallery_saver_plus`, `video_player`, `image`, `flutter_image_compress`
+- **Sharing and export:** `share_plus`, `qr_flutter`
+- **Persistence and services:** `shared_preferences`, app file storage, metadata sidecars
+- **Reliability/connectivity:** `connectivity_plus`, Firebase Core, Firebase Crashlytics
 
-Key paths added/updated:
+See [`pubspec.yaml`](pubspec.yaml) for the authoritative dependency list.
 
-- `lib/core/` → theme, constants, utils, shared widgets.
-- `lib/features/` → camera, gallery, detail, result, locations.
-- `lib/models/` → `LocationInfo`, `CapturedMedia`.
-- `lib/app.dart` + `lib/main.dart` → routing/bootstrap/orientation/permission flow.
+## Project structure
+
+```text
+lib/
+├── app.dart                       # App shell, theme, and route setup
+├── main.dart                      # Bootstrap, orientation, and permission startup
+├── core/                          # Shared constants, theme, utilities, and widgets
+├── features/                      # Feature-first camera, gallery, detail, result, locations, settings, account UI
+├── models/                        # Captured media, location, photo, and settings models
+├── providers/                     # App-level providers
+├── screens/                       # Legacy/top-level screens still present in the app
+├── services/                      # Camera, gallery, location, map, storage, backup, and error services
+├── utils/                         # Image, EXIF, and overlay helpers
+└── widgets/                       # Shared map/geo overlay widgets
+```
+
+Important platform files:
+
+- `android/app/src/main/AndroidManifest.xml` — Android permissions and Google Maps metadata hook.
+- `android/app/src/main/res/values/strings.xml` — Android string resources, including the Google Maps key placeholder.
+- `ios/Runner/Info.plist` — iOS camera, microphone, location, and photo-library usage descriptions.
 
 ## Prerequisites
 
-Before running the app, make sure you have:
+Install and configure the following before running the app:
 
-- **Flutter SDK** (stable channel)
-- **Android Studio** (latest stable)
-- **Flutter and Dart plugins** installed in Android Studio
-- **Android SDK** installed and configured
-- At least one **Android emulator** or a physical Android/iOS device
+- Flutter SDK on the stable channel
+- Dart SDK included with Flutter
+- Android Studio with Flutter and Dart plugins
+- Android SDK and an Android emulator or physical Android device
+- Xcode and CocoaPods for iOS development on macOS
 
-## Run in Android Studio
+Verify your environment with:
 
-1. **Clone the repository**
+```bash
+flutter doctor -v
+```
+
+## Getting started
+
+1. Clone the repository:
 
    ```bash
    git clone <your-repo-url>
    cd GPS_Camera
    ```
 
-2. **Install dependencies**
+2. Install dependencies:
 
    ```bash
    flutter pub get
    ```
 
-3. **Run the app**
+3. Run the app on a connected device or emulator:
 
    ```bash
    flutter run
    ```
 
-## Validation commands
+For the best camera and GPS results, test on a physical device with location services enabled.
 
-```bash
-flutter doctor -v
-flutter analyze
-flutter test
-```
+## Configuration
 
-## Permissions used
+### Permissions
 
-The app requests runtime permissions for:
+The app requests runtime access to:
 
 - Camera
-- Microphone (video recording)
-- Location (GPS metadata)
-- Photos/media storage
+- Microphone for video recording
+- Precise and approximate location
+- Photo library/media storage
+- Internet access for map tiles and network-backed services
 
-Platform declarations are configured in:
+Android declarations live in `android/app/src/main/AndroidManifest.xml`; iOS usage descriptions live in `ios/Runner/Info.plist`.
 
-- Android: `android/app/src/main/AndroidManifest.xml`
-- iOS: `ios/Runner/Info.plist`
+### Maps
 
-## Google Maps API key — where to add it
+The primary in-app map preview uses OpenStreetMap via `flutter_map`, so local map thumbnails do not require a paid API key.
 
-> Current implementation uses **OpenStreetMap (`flutter_map`)**, so a Google Maps API key is **not required**.
+The project also includes Google Maps dependencies and Android metadata. If you enable Google Maps features, add your key to the Android string resource referenced by the manifest and configure the iOS Google Maps SDK in `ios/Runner/AppDelegate.swift`.
 
-If you later switch to Google Maps (`google_maps_flutter`), add keys here:
+### Firebase Crashlytics
 
-### Android
+Firebase packages are included for crash reporting support. If Crashlytics is enabled for a deployment target, make sure the platform-specific Firebase configuration files are added and generated according to the Firebase Flutter setup flow.
 
-1. Open `android/app/src/main/AndroidManifest.xml`
-2. Inside `<application>`, add:
+## Common commands
 
-```xml
-<meta-data
-    android:name="com.google.android.geo.API_KEY"
-    android:value="YOUR_ANDROID_GOOGLE_MAPS_API_KEY" />
+```bash
+flutter pub get
+flutter analyze
+flutter test
+flutter run
+flutter build apk
+flutter build ios
 ```
-
-### iOS
-
-1. Open `ios/Runner/AppDelegate.swift`
-2. Import Google Maps and provide the key in `application(_:didFinishLaunchingWithOptions:)`:
-
-```swift
-import GoogleMaps
-
-GMSServices.provideAPIKey("YOUR_IOS_GOOGLE_MAPS_API_KEY")
-```
-
-Also ensure the iOS key is enabled for **Maps SDK for iOS** in Google Cloud Console.
 
 ## Troubleshooting
 
-### Flutter/Dart not found
+### Flutter or Dart command not found
 
-If `flutter` or `dart` are not recognized, install Flutter and add it to your PATH.
+Install Flutter and ensure the Flutter `bin` directory is on your `PATH`, then rerun `flutter doctor -v`.
 
-### Camera or location not working
+### Camera preview does not start
 
-- Ensure permissions are granted in OS settings.
-- Test on a real device for best GPS/camera behavior.
+- Confirm camera permission is granted in system settings.
+- Prefer a physical device if emulator camera support is unreliable.
+- Restart the app after changing OS-level permissions.
 
-### Build issues
+### Location stamp is missing or inaccurate
+
+- Enable device location services.
+- Grant precise location permission when prompted.
+- Test outdoors or near a window for a better GPS fix.
+
+### Media does not appear in the device gallery
+
+- Confirm photo/media permissions are granted.
+- Check platform-specific media access rules for the Android or iOS version under test.
+- Try `flutter clean`, reinstall the app, and capture new media.
+
+### Build issues after dependency changes
 
 ```bash
 flutter clean
 flutter pub get
+flutter analyze
 ```
 
-Then retry.
+Then retry the target build or run command.
 
-## Helpful documentation
+## Additional documentation
 
-- Flutter install: https://docs.flutter.dev/get-started/install
-- Android Studio: https://developer.android.com/studio
-- Flutter packages: https://pub.dev/
+- [`GPS_CAMERA_APP.md`](GPS_CAMERA_APP.md) — broader implementation plan and roadmap notes.
+- [Flutter install guide](https://docs.flutter.dev/get-started/install)
+- [Android Studio](https://developer.android.com/studio)
+- [Flutter packages](https://pub.dev/)
